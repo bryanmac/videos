@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Test — Vimeo (Desktop)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { font-size: 18px; }
+        body { font-family: sans-serif; background: #fff; color: #444; }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: .75rem 1.5rem;
+            background: #fff;
+            border-bottom: 1px solid #d0d0d0;
+        }
+        .topbar a { color: #777; text-decoration: none; font-size: .875rem; }
+        .topbar a:hover { color: #222; }
+        .topbar .provider { font-size: .875rem; color: #777; }
+        .topbar .provider strong { color: #1ab7ea; }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+        }
+        .video-container iframe {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            border: none;
+        }
+
+        .metrics {
+            padding: 1.5rem;
+            background: #fafafa;
+            border-top: 1px solid #d0d0d0;
+        }
+        .metrics-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .metrics h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; color: #999; }
+        .reload-btn {
+            font-size: .75rem;
+            color: #777;
+            background: none;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            padding: .25rem .6rem;
+            cursor: pointer;
+        }
+        .reload-btn:hover { color: #222; border-color: #888; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
+        }
+        .metric-card {
+            background: #fff;
+            padding: 1rem 1.25rem;
+            border-radius: 6px;
+            border: 1px solid #d0d0d0;
+        }
+        .metric-card .label {
+            font-size: .7rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #999;
+            margin-bottom: .5rem;
+        }
+        .metric-card .value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #222;
+            font-variant-numeric: tabular-nums;
+        }
+        .metric-card .value.pending { color: #ccc; font-size: 1.2rem; }
+
+        .note {
+            margin-top: 1.25rem;
+            font-size: .72rem;
+            color: #aaa;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="topbar">
+        <a href="index.html">← Back</a>
+        <span class="provider">Provider: <strong>Vimeo</strong></span>
+    </div>
+
+    <div class="video-container">
+        <iframe
+            id="hero-video"
+            src="https://player.vimeo.com/video/810925030?background=1"
+            allow="autoplay; fullscreen"
+            allowfullscreen=""
+            sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+
+    <div class="metrics">
+        <div class="metrics-header">
+            <h2>Performance Metrics</h2>
+            <button class="reload-btn" onclick="location.reload()">Re-run</button>
+        </div>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="label">Player Load Time</div>
+                <div class="value pending" id="m-ttff">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">First Contentful Paint</div>
+                <div class="value pending" id="m-fcp">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Largest Contentful Paint</div>
+                <div class="value pending" id="m-lcp">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Page Requests</div>
+                <div class="value pending" id="m-requests">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="label">Page Transfer</div>
+                <div class="value pending" id="m-transfer">—</div>
+            </div>
+        </div>
+        <p class="note">
+            * <strong>Player Load Time</strong> = navigation start → iframe load event (proxy for time to first frame).<br>
+            * <strong>Page Requests / Transfer</strong> = main page resources only; video segments load inside the player iframe and are not accessible here. Use WebPageTest for full network waterfall analysis.
+        </p>
+    </div>
+
+    <script>
+    function fmt(ms) {
+        return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : Math.round(ms) + 'ms';
+    }
+
+    function set(id, val) {
+        const el = document.getElementById(id);
+        el.textContent = val;
+        el.classList.remove('pending');
+    }
+
+    // Player Load Time (TTFF proxy)
+    document.getElementById('hero-video').addEventListener('load', function () {
+        set('m-ttff', fmt(performance.now()));
+    });
+
+    // First Contentful Paint
+    new PerformanceObserver(function (list) {
+        for (const entry of list.getEntries()) {
+            if (entry.name === 'first-contentful-paint') {
+                set('m-fcp', fmt(entry.startTime));
+            }
+        }
+    }).observe({ type: 'paint', buffered: true });
+
+    // Largest Contentful Paint
+    new PerformanceObserver(function (list) {
+        const entries = list.getEntries();
+        if (entries.length) {
+            set('m-lcp', fmt(entries[entries.length - 1].startTime));
+        }
+    }).observe({ type: 'largest-contentful-paint', buffered: true });
+
+    // Page Requests + Transfer Size
+    window.addEventListener('load', function () {
+        const resources = performance.getEntriesByType('resource');
+        set('m-requests', resources.length);
+
+        const nav = performance.getEntriesByType('navigation')[0];
+        const total = resources.reduce(function (sum, r) { return sum + (r.transferSize || 0); }, 0)
+            + (nav ? (nav.transferSize || 0) : 0);
+
+        set('m-transfer', total > 0
+            ? (total / 1024).toFixed(1) + ' KB'
+            : 'N/A (cross-origin)');
+    });
+    </script>
+
+</body>
+</html>
